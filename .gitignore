@@ -1,0 +1,34 @@
+# Composer dependencies
+/vendor/
+/composer.lock
+/node_modules/
+
+# Output directory for Code Reaper reports
+/out/
+/*.out
+
+# Logs & temp
+*.log
+*.tmp
+*.cache
+
+# IDE/project files
+/.idea/
+/.vscode/
+/nbproject/
+/*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# PHPUnit & coverage
+/.phpunit.result.cache
+/coverage/
+/.clover.xml
+
+# Build artifacts
+/build/
+/dist/
