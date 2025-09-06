@@ -32,7 +32,8 @@ final class ScanCommand extends Command
             ->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to reaper.yaml', 'reaper.yaml')
             ->addOption('out', 'o', InputOption::VALUE_REQUIRED, 'Output directory (overrides config)')
             ->addOption('debug', 'd', InputOption::VALUE_NONE, 'Debug output')
-            ->addOption('entry', null, InputOption::VALUE_IS_ARRAY|InputOption::VALUE_REQUIRED, 'Extra entry file(s)');
+            ->addOption('entry', null, InputOption::VALUE_IS_ARRAY|InputOption::VALUE_REQUIRED, 'Extra entry file(s)')
+            ->addOption('root', null, InputOption::VALUE_REQUIRED, 'Project root directory (for relative paths)', '.');
     }
 
     /**
