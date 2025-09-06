@@ -22,7 +22,7 @@ This project follows [Semantic Versioning](https://semver.org/).
 - Debug mode to reveal scanned files.
 - Edgy CLI branding:
   
-      bin/reaper --config reaper.yaml --debug
+      bin/reaper scan --config reaper.yaml --debug
 
 - PHPUnit test suite with a haunted sandbox repo:
   - **PhpScannerTest**

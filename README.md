@@ -50,16 +50,16 @@ scoring:
 output_dir: "out"
 ```
 
-2. Reap:
+2. Scan:
 
 ```bash
-bin/reaper --config reaper.yaml
+bin/reaper scan --config reaper.yaml
 ```
 
 3. Debug mode (see what’s on the chopping block):
 
 ```bash
-bin/reaper --config reaper.yaml --debug
+bin/reaper scan --config reaper.yaml --debug
 ```
 
 ---
