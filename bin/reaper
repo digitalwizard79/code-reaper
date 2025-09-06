@@ -7,7 +7,7 @@ use Symfony\Component\Console\Application;
 use Reaper\Cli\ScanCommand;
 
 // Create and run the console application
-$app = new Application('Code Reaper', '0.1.0');
+$app = new Application('Code Reaper', '0.1.1');
 $app->add(new ScanCommand());
 $app->setDefaultCommand('scan');
 $app->run();

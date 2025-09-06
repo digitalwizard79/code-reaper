@@ -44,33 +44,76 @@ final class ScanCommand extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $cfg = Config::load($input->getOption('config'));
-        $outDir = $input->getOption('out') ?? $cfg->outputDir;
+        // Load config
+        $configPath = (string)$input->getOption('config');
+        $cfg = Config::load($configPath);
 
-        $entryFiles = array_merge($cfg->entryFiles, $input->getOption('entry') ?? []);
-        if (!$entryFiles) {
-            $output->writeln('<comment>No entry points specified. Use reaper.yaml entry_points.files or --entry.</comment>');
+        // Resolve baseDir (project root): --root wins; else directory of config file
+        $baseDir = $input->getOption('root') ?: dirname(realpath($configPath));
+        $baseDir = self::normalizePath((string)$baseDir);
+
+        // Resolve output directory (absolute)
+        $outDir = (string)($input->getOption('out') ?? $cfg->outputDir);
+        if (!self::isAbsolutePath($outDir)) {
+            $outDir = self::join($baseDir, $outDir);
         }
 
-        $files = $this->resolveFiles($cfg->include, $cfg->exclude);
+        // Resolve files to scan relative to baseDir (returns RELATIVE paths)
+        $files = $this->resolveFiles($cfg->include, $cfg->exclude, $baseDir);
 
+        // Debug info
         if ($input->getOption('debug')) {
-            $output->writeln("Found ".count($files)." PHP files");
-            foreach (array_slice($files, 0, 20) as $f) $output->writeln(" - $f");
+            $output->writeln("Root: " . $baseDir);
+            $output->writeln("Found " . count($files) . " PHP files");
+            foreach (array_slice($files, 0, 100) as $f) {
+                $output->writeln(" - " . $f);
+            }
         }
 
-        $scanner = new PhpScanner();
-        $graph = $scanner->scan($files);
+        // If nothing to scan, still write empty reports and exit cleanly
+        if (count($files) === 0) {
+            @mkdir($outDir, 0777, true);
+            file_put_contents($outDir.'/dead_code.json', json_encode([
+                'summary' => [
+                    'scanned_files'   => 0,
+                    'symbols_total'   => 0,
+                    'dead_symbols'    => 0,
+                    'high_confidence' => 0,
+                ],
+                'items' => [],
+            ], JSON_PRETTY_PRINT));
+            file_put_contents($outDir.'/delete_list.txt', '');
+            file_put_contents($outDir.'/delete_list_high.txt', '');
+            $output->writeln("Code Reaper finished.\n\nScanned 0 files.\n  0 symbols\n  0 dead (0 high-confidence).\nOutput -> ".$outDir);
+            return Command::SUCCESS;
+        }
 
-        // Seed reachability from all symbols defined in entry files
+        // Make absolute file paths for the scanner
+        $absFiles = array_map(fn($rel) => self::join($baseDir, $rel), $files);
+
+        // Scan
+        $scanner = new PhpScanner();
+        $graph = $scanner->scan($absFiles);
+
+        // Entry files: merge config + CLI, make absolute
+        $entryFiles = array_merge($cfg->entryFiles, (array)$input->getOption('entry'));
+        $entryFiles = array_values(array_filter($entryFiles, fn($p) => strlen((string)$p) > 0));
+        $entryFiles = array_map(function ($p) use ($baseDir) {
+            $p = self::normalizePath((string)$p);
+            return self::isAbsolutePath($p) ? $p : self::join($baseDir, $p);
+        }, $entryFiles);
+
+        // Seed reachability from symbols defined in entry files
         $start = $this->symbolsFromFiles($graph->nodes, $entryFiles);
 
+        // Heuristic: if nothing seeded, include symbols from directories that contain entry files
         if (!$start && $entryFiles) {
-            $byFile = array_flip($this->normalize($entryFiles));
+            $entryDirs = array_unique(array_map(static fn($f) => rtrim(dirname(self::normalizePath($f)), '/'), $entryFiles));
             foreach ($graph->nodes as $sym => $meta) {
-                foreach ($byFile as $ef => $_) {
-                    if (strpos($meta['file'], dirname($ef)) === 0) {
+                foreach ($entryDirs as $dir) {
+                    if (str_starts_with(self::normalizePath($meta['file']), $dir . '/')) {
                         $start[] = $sym;
+                        break;
                     }
                 }
             }
@@ -79,70 +122,68 @@ final class ScanCommand extends Command
 
         Reachability::markFrom($graph, $start);
 
+        // Write reports
         $summary = Reporter::writeReports($graph, $outDir, $cfg->deleteThreshold, $cfg->keepPatterns);
 
-        $output->writeln(
-            sprintf(
+        // Human summary
+        $output->writeln(sprintf(
             "Code Reaper finished.\n\nScanned %d files.\n  %d symbols\n  %d dead (%d high-confidence).\nOutput -> %s",
-            $summary['scanned_files'], $summary['symbols_total'], $summary['dead_symbols'], $summary['high_confidence'], $outDir
-            )
-        );
+            $summary['scanned_files'],
+            $summary['symbols_total'],
+            $summary['dead_symbols'],
+            $summary['high_confidence'],
+            $outDir
+        ));
 
         return Command::SUCCESS;
     }
 
     /**
-     * Resolve PHP files to scan based on include/exclude patterns
-     * @param string[] $includes // Prefer directory roots like "src", "app", "public"
-     * @param string[] $excludes // Directories or path globs like "vendor", "tests"
-     * @return string[]
+     * @param string[] $includes  e.g. ["src", "public"] or file paths
+     * @param string[] $excludes  e.g. ["vendor", "tests", "migrations/**"]
+     * @param string   $baseDir   directory of the config (or --root)
+     * @return string[]           relative paths from $baseDir (de-duped)
      */
-    private function resolveFiles(array $includes, array $excludes): array
+    private function resolveFiles(array $includes, array $excludes, string $baseDir): array
     {
         $finder = new Finder();
         $finder->files()->name('*.php');
 
-        // If no includes provided, default to current dir
-        $roots = $includes ?: ['.'];
-
-        // Normalize to directory roots (if someone passes "src/**", trim to "src")
-        $roots = array_map(function ($p) {
-            $p = rtrim(str_replace('\\', '/', $p), '/');
-            if (substr($p, -3) === '/**') {
-                $p = substr($p, 0, -3);
-            }
-            return $p;
-        }, $roots);
+        $roots = $includes ?: []; // ← do NOT default to '.'
+        $roots = array_map(fn($p) => rtrim(self::normalizePath($p), '/'), $roots);
 
         foreach ($roots as $root) {
-            if (is_dir($root)) {
-                $finder->in($root);
-            } elseif (is_file($root)) {
-                // Single file include
-                $finder->append([$root]);
+            $abs = self::isAbsolutePath($root) ? $root : self::join($baseDir, $root);
+            if (is_dir($abs)) {
+                $finder->in($abs);
+            } elseif (is_file($abs)) {
+                $finder->append([$abs]);
             } else {
-                // If it's a pattern, search from cwd and filter later
-                $finder->in('.');
+                // Skip invalid include entries; don't silently scan '.'
+                continue;
             }
         }
 
+        // Exclusions
         foreach ($excludes as $ex) {
-            $ex = rtrim(str_replace('\\', '/', $ex), '/');
-            // Support common patterns like "vendor", "tests"
-            if ($ex === 'vendor' || $ex === 'vendor/**') {
-                $finder->exclude('vendor');
-            } elseif ($ex === 'tests' || $ex === 'tests/**') {
-                $finder->exclude('tests');
-            } else {
-                // Generic path-not-match
-                $finder->notPath($ex);
-            }
+            $ex = rtrim(self::normalizePath($ex), '/');
+            if ($ex === 'vendor' || $ex === 'vendor/**') { $finder->exclude('vendor'); continue; }
+            if ($ex === 'tests'  || $ex === 'tests/**')  { $finder->exclude('tests');  continue; }
+            // Generic path/pattern relative to baseDir
+            $finder->notPath(self::isAbsolutePath($ex) ? $ex : self::join($baseDir, $ex));
         }
 
+        // Collect as canonical, de-duped, relative-to-baseDir
+        $seen = [];
         $files = [];
         foreach ($finder as $file) {
-            $files[] = str_replace('\\', '/', $file->getPathname());
+            $abs = realpath($file->getPathname()) ?: $file->getPathname();
+            $abs = self::normalizePath($abs);
+            if (isset($seen[$abs])) continue;
+            $seen[$abs] = true;
+            $files[] = self::toRelative($abs, $baseDir);
         }
+
         sort($files);
         return $files;
     }
@@ -171,5 +212,30 @@ final class ScanCommand extends Command
     private function normalize(array $files): array
     {
         return array_map(static fn($p) => rtrim(str_replace(['\\'], ['/'], $p), '/'), $files);
+    }
+
+    private static function toRelative(string $absPath, string $baseDir): string
+    {
+        $absPath = self::normalizePath($absPath);
+        $baseDir = rtrim(self::normalizePath(realpath($baseDir) ?: $baseDir), '/');
+        if (str_starts_with($absPath, $baseDir . '/')) {
+            return substr($absPath, strlen($baseDir) + 1); // no leading "./"
+        }
+        return $absPath; // fallback: absolute
+    }
+
+    private static function normalizePath(string $p): string {
+        return str_replace('\\', '/', $p);
+    }
+
+    private static function isAbsolutePath(string $p): bool {
+        $p = self::normalizePath($p);
+        return preg_match('#^([A-Za-z]:/|//|/)#', $p) === 1; // C:/, //server/, or /root
+    }
+
+    private static function join(string ...$parts): string {
+        $parts = array_map(fn($x) => trim(self::normalizePath($x), '/'), $parts);
+        $first = array_shift($parts);
+        return $first . (count($parts) ? '/' . implode('/', $parts) : '');
     }
 }

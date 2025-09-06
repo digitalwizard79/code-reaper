@@ -3,7 +3,7 @@
   "description": "Code Reaper — Hunt and purge dead PHP code (AST + call graph).",
   "type": "project",
   "license": "MIT",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "authors": [
     {
       "name": "Digital Wizard",

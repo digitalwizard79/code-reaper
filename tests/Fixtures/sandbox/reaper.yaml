@@ -1,0 +1,17 @@
+paths:
+  include:
+    - "src"
+    - "public"
+  exclude:
+    - "vendor"
+    - "tests"
+entry_points:
+  files:
+    - "public/index.php"
+rules:
+  keep_globs: []
+  keep_patterns: []
+risky_patterns: []
+scoring:
+  delete_threshold: 5
+output_dir: "out"

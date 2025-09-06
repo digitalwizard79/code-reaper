@@ -5,7 +5,6 @@
 
 # Output directory for Code Reaper reports
 /out/
-/*.out
 
 # Logs & temp
 *.log
@@ -28,6 +27,7 @@ Desktop.ini
 /.phpunit.result.cache
 /coverage/
 /.clover.xml
+/tests/Fixtures/sandbox/out/
 
 # Build artifacts
 /build/
