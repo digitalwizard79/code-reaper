@@ -14,7 +14,8 @@ They clutter your repo, slow you down, and rot your codebase from the inside.
 - 👻 **Reveals** functions, classes, and methods never touched by your app.  
 - 💀 **Scores** confidence: not everything is safe to reap — Reaper tells you which bodies are cold.  
 - 📝 **Reports** in JSON + flat lists so you can delete with precision.  
-- ☠️ **High-confidence list** = files you can nuke outright.
+- ☠️ **High-confidence list** = files you can nuke outright.  
+- ⚰️ **Purge command** to safely auto-delete dead files (dry-run by default).  
 
 ---
 
@@ -31,6 +32,8 @@ chmod +x bin/reaper
 ---
 
 ## 🔥 Usage
+
+### Scan
 
 1. Drop a `reaper.yaml` in your project root:
 
@@ -61,6 +64,31 @@ bin/reaper scan --config reaper.yaml
 ```bash
 bin/reaper scan --config reaper.yaml --debug
 ```
+
+---
+
+### Purge (Safe Deletion)
+
+Dry-run (default):
+
+```bash
+bin/reaper purge --report out/dead_code.json --mode all --threshold 6
+```
+
+Apply on a cleanup branch with auto-commit:
+
+```bash
+bin/reaper purge \
+  --report out/dead_code.json \
+  --mode all --threshold 7 \
+  --apply --branch reap/cleanup \
+  --commit-message "Reap: remove high-confidence dead files" \
+  --yes
+```
+
+Modes:
+- `all` → delete only if **all** symbols in a file are above the threshold. (safer)  
+- `any` → delete if **any** symbol in a file is above the threshold. (aggressive)  
 
 ---
 
@@ -95,7 +123,8 @@ vendor/bin/phpunit
 - **PhpScannerTest** → Reaper can sniff out functions, classes, methods.  
 - **ReachabilityTest** → ensures dead symbols really stay dead.  
 - **ReporterTest** → confirms reports are written, deduped, and high-confidence lists are correct.  
-- **ScanCommandTest** → end-to-end run against the sandbox (finds `Math::product`, `Stringy`, and `debugDump()`).  
+- **ScanCommandTest** → end-to-end run against the sandbox.  
+- **PurgeCommandTest** → dry-run, apply, include/exclude, and git branch/commit flows.  
 
 If tests pass, you’ll see ✅ and the Reaper is sharp.  
 If they fail, sharpen your scythe (check config, paths, or fixtures).
@@ -116,10 +145,9 @@ Reaper calls it out. `product()` is dead. Bury it.
 ---
 
 ## 🛠 Roadmap of Doom
-- `reaper purge` → auto-delete dead files with git safety checks.  
 - Framework seers → Laravel / Symfony route parsing so no ghost goes unnoticed.  
-- HTML “graveyard” report with filters and search.  
-- Maybe a TUI dashboard straight from the underworld.
+- HTML graveyard report with filters and search.  
+- Optional TUI dashboard straight from the underworld.  
 
 ---
 
@@ -129,4 +157,5 @@ Use it to clean your repo. Or feed your enemies’ repos to the Reaper.
 
 ---
 
-**Don't Fear the Reaper**
+**Reap your repo. Ship leaner. Fear nothing.**  
+*Don’t Fear the Reaper.*
