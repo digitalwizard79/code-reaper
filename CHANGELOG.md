@@ -5,6 +5,21 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.0] – 2025-09-08
+### Purge Arrives ⚰️
+- New **`reaper purge`** command:
+  - Dry-run by default (safe preview of deletions).
+  - Supports `--mode all|any` for conservative vs aggressive cleanup.
+  - `--threshold` to set confidence cutoff.
+  - `--include-glob` / `--exclude-glob` filters.
+  - Git integration:
+    - `--branch` to create/switch before deletion.
+    - `--commit-message` to auto-commit deletions.
+  - `--apply` + `--yes` for non-interactive usage (CI friendly).
+- Added **PurgeCommandTest** covering dry-run, apply, include/exclude, and git flows.
+
+---
+
 ## [0.1.0] – 2025-09-06
 ### First Harvest 🌑
 - Initial public release of **Code Reaper**.
@@ -33,7 +48,6 @@ This project follows [Semantic Versioning](https://semver.org/).
 ---
 
 ## Unreleased ☠️
-- `reaper purge` → auto-delete high-confidence dead files with git safety checks.
 - Framework adapters (Laravel/Symfony) to mark controllers & commands as alive.
 - HTML graveyard report with filters and search.
 - Optional TUI dashboard for interactive scything.
